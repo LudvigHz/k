@@ -1,5 +1,7 @@
 zmodload zsh/datetime
 zmodload -F zsh/stat b:zstat
+0=${(%):-%N}
+source ${0:A:h}/devicons-ls.sh
 
 k () {
   # ----------------------------------------------------------------------------
@@ -12,7 +14,7 @@ k () {
 
   # Process options and get files/directories
   typeset -a o_all o_almost_all o_human o_si o_directory o_group_directories \
-	  o_no_directory o_no_vcs o_sort o_sort_reverse o_help
+	  o_no_directory o_no_symbol o_no_vcs o_sort o_sort_reverse o_help
   zparseopts -E -D \
              a=o_all -all=o_all \
              A=o_almost_all -almost-all=o_almost_all \
@@ -23,6 +25,7 @@ k () {
              -si=o_si \
              n=o_no_directory -no-directory=o_no_directory \
              -no-vcs=o_no_vcs \
+             -no-symbol=o_no_symbol \
              r=o_sort_reverse -reverse=o_sort_reverse \
              -sort:=o_sort \
              S=o_sort \
@@ -52,6 +55,7 @@ k () {
     print -u2 "\t                        time (t), ctime or status (c),"
     print -u2 "\t       		 atime or access or use (u)"
     print -u2 "\t        --no-vcs        do not get VCS status (much faster)"
+    print -u2 "\t        --no-symbol     do not show file symbol (should be used if patched font is not installed)"
     print -u2 "\t        --help          show this help"
     return 1
   fi
@@ -468,9 +472,9 @@ k () {
 
       # Format date to show year if more than 6 months since last modified
       if (( TIME_DIFF < 15724800 )); then
-        DATE_OUTPUT="${DATE[2]} ${(r:5:: :)${DATE[3][0,5]}} ${DATE[4]}"
+        DATE_OUTPUT="${DATE[2]} ${(r:5:: :)${DATE[3][0,5]}}"
       else
-        DATE_OUTPUT="${DATE[2]} ${(r:6:: :)${DATE[3][0,5]}} ${DATE[5]}"  # extra space; 4 digit year instead of 5 digit HH:MM
+        DATE_OUTPUT="${DATE[2]} ${(r:6:: :)${DATE[3][0,5]}}"  # extra space; 4 digit year instead of 5 digit HH:MM
       fi;
       DATE_OUTPUT[1]="${DATE_OUTPUT[1]//0/ }" # If day of month begins with zero, replace zero with space
 
@@ -482,6 +486,161 @@ k () {
       # --------------------------------------------------------------------------
       if [[ "$o_no_vcs" != "" ]]; then
         REPOMARKER=""
+function devicons_get_directory_symbol {
+
+	local symbol=""
+
+	echo "$symbol $1"
+	return 0
+}
+
+function devicons_get_git_directory_symbol {
+
+	local symbol=""
+
+	echo "$symbol $1"
+	return 0
+}
+
+function devicons_get_filetype_symbol {
+
+	declare -A extensions=(
+		[txt]=e
+		[styl]=
+		[scss]=
+		[htm]=
+		[html]=
+		[slim]=
+		[xml]=
+		[ejs]=
+		[css]=
+		[less]=
+		[md]=
+		[markdown]=
+		[json]=
+		[js]=
+		[jsx]=
+		[rb]=
+		[php]=
+		[py]=
+		[pyc]=
+		[pyo]=
+		[pyd]=
+		[coffee]=
+		[mustache]=
+		[hbs]=
+		[conf]=
+		[ini]=
+		[yml]=
+		[bat]=
+		[jpg]=
+		[jpeg]=
+		[bmp]=
+		[png]=
+		[gif]=
+		[ico]=
+		[twig]=
+		[cpp]=
+		[c++]=
+		[cxx]=
+		[cc]=
+		[cp]=
+		[c]=
+		[hs]=
+		[lhs]=
+		[lua]=
+		[java]=
+		[sh]=
+		[fish]=
+		[ml]=λ
+		[mli]=λ
+		[diff]=
+		[db]=
+		[sql]=
+		[dump]=
+		[clj]=
+		[cljc]=
+		[cljs]=
+		[edn]=
+		[scala]=
+		[go]=
+		[dart]=
+		[xul]=
+		[sln]=
+		[suo]=
+		[pl]=
+		[pm]=
+		[t]=
+		[rss]=
+		[f#]=
+		[fsscript]=
+		[fsx]=
+		[fs]=
+		[fsi]=
+		[rs]=
+		[rlib]=
+		[d]=
+		[erl]=
+		[hrl]=
+		[vim]=
+		[vimrc]=
+		[ai]=
+		[psd]=
+		[psb]=
+		[ts]=
+		[jl]=
+                [sh]=
+                [bash]=
+                [zsh]=
+                [log]=
+                [git]=
+                [gitignore]=
+                [zip]=
+                [gz]=
+                [xz]=
+                [pdf]=
+                [doc]=
+                [svg]=ﰟ
+                [eps]=ﰟ
+                [epf]=
+                [deb]=
+                [iso]=﫭
+                [mp4]=
+                [mkv]=
+	)
+
+        declare -A filenames=(
+              [Dockerfile]=
+              [Makefile]=
+              [LICENSE]=
+              [vimrc]=
+              [zshrc]=
+        )
+
+	local filetype
+	local default=
+	local exist_check=1
+	local input=$1
+	local filename="$1"
+	# using ## for possibly more than one "." (get after last one):
+	local filetype="${filename##*.}"
+        # get filename without extension
+        local filename_noext="${filename%.*}"
+
+        # If file has declared extension, use corresponding symbol
+	if [ ! -z "$filetype" ] && [ ${extensions[$filetype]+$exist_check} ]; then
+		local symbol=${extensions[$filetype]}
+        # If the file has no extension, use symbol by filename
+        elif [ ${filenames[$filename_noext]+$exist_check} ]; then
+                local symbol=${filenames[$filename_noext]}
+        else
+		local symbol=$default
+	fi
+
+	echo "$symbol"
+
+	return 0
+}
       elif (( IS_GIT_REPO != 0)); then
         # If we're not in a repo, still check each directory if it's a repo, and
         # then mark appropriately
@@ -515,12 +674,29 @@ k () {
         fi
       fi
 
+
+      NAME="${${NAME##*/}//$'\e'/\\e}"    # also propagate changes to SYMLINK_TARGET below
+
+      # --------------------------------------------------------------------------
+      # Add filetype symbol
+      # --------------------------------------------------------------------------
+      if [[ "$o_no_symbol" != "" ]]; then
+        SYMBOL=""
+      else
+        if (( IS_DIRECTORY )); then
+          if (( IS_GIT_REPO && !INSIDE_WORK_TREE )); then SYMBOL="$(devicons_get_git_directory_symbol)";
+          else SYMBOL="$(devicons_get_directory_symbol)";
+          fi
+        else SYMBOL="$(devicons_get_filetype_symbol $NAME) ";
+        fi
+      fi
+
+
       # --------------------------------------------------------------------------
       # Colour the filename
       # --------------------------------------------------------------------------
       # Unfortunately, the choices for quoting which escape ANSI color sequences are q & qqqq; none of q- qq qqq work.
       # But we don't want to quote '.'; so instead we escape the escape manually and use q-
-      NAME="${${NAME##*/}//$'\e'/\\e}"    # also propagate changes to SYMLINK_TARGET below
 
       if [[ $IS_DIRECTORY == 1 ]]; then
         if [[ $IS_WRITABLE_BY_OTHERS == 1 ]]; then
@@ -553,7 +729,7 @@ k () {
       # --------------------------------------------------------------------------
       # Display final result
       # --------------------------------------------------------------------------
-      print -r -- "$PERMISSIONS_OUTPUT $HARDLINKCOUNT $OWNER $GROUP $FILESIZE_OUT $DATE_OUTPUT $REPOMARKER $NAME$SYMLINK_TARGET $REPOBRANCH"
+      print -r -- "$PERMISSIONS_OUTPUT $HARDLINKCOUNT $OWNER $GROUP $FILESIZE_OUT $DATE_OUTPUT $REPOMARKER $SYMBOL$NAME$SYMLINK_TARGET $REPOBRANCH"
 
       k=$((k+1)) # Bump loop index
     done
