@@ -14,7 +14,7 @@ k () {
 
   # Process options and get files/directories
   typeset -a o_all o_almost_all o_human o_si o_directory o_group_directories \
-	  o_no_directory o_no_symbol o_no_vcs o_sort o_sort_reverse o_help
+	  o_no_directory o_show_date o_no_symbol o_no_vcs o_sort o_sort_reverse o_help
   zparseopts -E -D \
              a=o_all -all=o_all \
              A=o_almost_all -almost-all=o_almost_all \
@@ -26,6 +26,7 @@ k () {
              n=o_no_directory -no-directory=o_no_directory \
              -no-vcs=o_no_vcs \
              -no-symbol=o_no_symbol \
+             D=o_show_date -show-date=o_show_date \
              r=o_sort_reverse -reverse=o_sort_reverse \
              -sort:=o_sort \
              S=o_sort \
@@ -45,6 +46,7 @@ k () {
     print -u2 "\t-d      --directory     list only directories"
     print -u2 "\t-n      --no-directory  do not list directories"
     print -u2 "\t-h      --human         show filesizes in human-readable format"
+    print -u2 "\t-D      --show-date          show date in addition to time"
     print -u2 "\t        --si            with -h, use powers of 1000 not 1024"
     print -u2 "\t-r      --reverse       reverse sort order"
     print -u2 "\t-S                      sort by size"
@@ -418,25 +420,39 @@ k () {
        FILESIZE_OUT="${(l:MAX_LEN[5]:)FILESIZE_OUT}"
 
       # --------------------------------------------------------------------------
-      # Colour the permissions - TODO
+      # Colour the permissions
       # --------------------------------------------------------------------------
       # Colour the first character based on filetype
       FILETYPE="${PERMISSIONS[1]}"
+      if [[ "$FILETYPE" = "d" ]]; then
+        FILETYPE=$'\e[38;5;4m'"$FILETYPE"$'\e[0m'
+      elif [[ "$FILETYPE" = "l" ]]; then
+        FILETYPE=$'\e[38;5;5m'"$FILETYPE"$'\e[0m'
+      fi
 
-      # Permissions Owner
-      PER1="${PERMISSIONS[2,4]}"
+      # Colour the r/w/x permissions
+      PER="${PERMISSIONS[2,10]}"
+      colored_r=$'\e[38;5;2mr\e[0m'
+      colored_w=$'\e[38;5;3mw\e[0m'
+      colored_x=$'\e[38;5;1mx\e[0m'
 
-      # Permissions Group
-      PER2="${PERMISSIONS[5,7]}"
+      # colour read permissions
+      PER="${PER//r/$colored_r}"
 
-      # Permissions User
-      PER3="${PERMISSIONS[8,10]}"
+      # colour write permissions
+      PER="${PER//w/$colored_w}"
 
-      PERMISSIONS_OUTPUT="$FILETYPE$PER1$PER2$PER3"
+      # colour executable permissions
+      PER="${PER//x/$colored_x}"
+
+
+      PERMISSIONS_OUTPUT=$'\e[38;5;244m'"$FILETYPE$PER"$'\e[0m'
 
       # --------------------------------------------------------------------------
       # Colour the symlinks
       # --------------------------------------------------------------------------
+
+      HARDLINKCOUNT=$'\e[38;5;244m'"$HARDLINKCOUNT"$'\e[0m'
 
       # --------------------------------------------------------------------------
       # Colour Owner and Group
@@ -471,10 +487,14 @@ k () {
       done
 
       # Format date to show year if more than 6 months since last modified
-      if (( TIME_DIFF < 15724800 )); then
-        DATE_OUTPUT="${DATE[2]} ${(r:5:: :)${DATE[3][0,5]}}"
+      if [[ "$o_show_date" != "" ]]; then
+        if (( TIME_DIFF < 15724800 )); then
+          DATE_OUTPUT="${DATE[2]} ${(r:5:: :)${DATE[3][0,5]}} ${DATE[4]}"
+        else
+          DATE_OUTPUT="${DATE[2]} ${(r:6:: :)${DATE[3][0,5]}} ${DATE[5]}"  # extra space; 4 digit year instead of 5 digit HH:MM
+        fi;
       else
-        DATE_OUTPUT="${DATE[2]} ${(r:6:: :)${DATE[3][0,5]}}"  # extra space; 4 digit year instead of 5 digit HH:MM
+        DATE_OUTPUT="${DATE[2]} ${(r:5:: :)${DATE[3][0,5]}}"
       fi;
       DATE_OUTPUT[1]="${DATE_OUTPUT[1]//0/ }" # If day of month begins with zero, replace zero with space
 
